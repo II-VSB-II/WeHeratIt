@@ -8,7 +8,7 @@ def urlget(url,username,password):
     for i in TicketList:
         print i
 
-url=""
+url="https://<instance>.service-now.com/incident.do?JSONv2&amp;sysparm_action=getRecords&amp;sysparm_query=assignment_group=<group_id>^incident_state=1"
 username=""
 password=""
 urlget(url,username,password)
