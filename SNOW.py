@@ -1,5 +1,5 @@
 import requests
-def urlget(self, url,username,password):
+def urlget(url,username,password):
     proxyDict = {}
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     response = requests.get(url, auth=(username,password), headers=headers,proxies=proxyDict)
