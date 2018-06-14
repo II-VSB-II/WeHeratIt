@@ -16,4 +16,4 @@ wget https://bootstrap.pypa.io/get-pip.py
 python3.6 get-pip.py
 
 #Installing Modules
-python3.6 -m pip install requests
+python3.6 -m pip install cm-api
