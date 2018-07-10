@@ -181,6 +181,9 @@ class Autoscale
             @log.info("#{scale_list.length} apps require scaling")
           end
           total_cpu,used_cpu,threshold=checking_cpu
+          @log.info('Total CPU: #{total_cpu}')
+          @log.info('Used CPU: #{used_cpu}')
+          @log.info('Threshold: #{threshold}')
           if used_cpu<threshold
           scale_apps_inPrivateCloud(scale_list)
           else
@@ -355,6 +358,7 @@ class Autoscale
   end
 
   def scale_apps_inPrivateCloud(scale_list)
+    @log.info('Scaling in private')
     scale_list.each do |app,instances|
       req = Net::HTTP::Put.new('/v2/apps/' + app)
       if !@options.marathonCredentials.empty?
@@ -371,7 +375,7 @@ class Autoscale
     end
   end
   def scale_apps_inPublicCloud(scale_list)
-    puts "scale in public cloud"
+    @log.info('Scaling in public')
   end
   def checking_cpu
     uri = URI("http://10.0.30.101:5050/metrics/snapshot")
@@ -383,7 +387,7 @@ class Autoscale
       result = JSON.parse(response.body)
       total_cpu=result["master\/cpus_total"]
       used_cpu=result["master\/cpus_used"]
-      threshold=0.7*total_cpu
+      threshold=0.2*total_cpu
       return total_cpu,used_cpu,threshold
    else
        puts "ERROR!!!"
