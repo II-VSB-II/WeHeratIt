@@ -178,17 +178,19 @@ class Autoscale
 
         if total_samples >= @options.samples
           scale_list = build_scaling_list
-          if !scale_list.empty?
-            @log.info("#{scale_list.length} apps require scaling")
-          end
           total_cpu,used_cpu,threshold=checking_cpu
           @log.info('Total CPU:'+total_cpu.to_s)
           @log.info('Used CPU:'+used_cpu.to_s)
           @log.info('Threshold:'+threshold.to_s)
-          if used_cpu<threshold
-          scale_apps_inPrivateCloud(scale_list)
+          if !scale_list.empty?
+            @log.info("#{scale_list.length} apps require scaling")
+            if used_cpu<threshold
+                scale_apps_inPrivateCloud(scale_list)
+            else
+                scale_apps_inPublicCloud(scale_list)
+            end
           else
-            scale_apps_inPublicCloud(scale_list)
+            @log.info("Not Scaling")
           end
         end
 
