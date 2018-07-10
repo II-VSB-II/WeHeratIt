@@ -180,8 +180,12 @@ class Autoscale
           if !scale_list.empty?
             @log.info("#{scale_list.length} apps require scaling")
           end
-
+          total_cpu,used_cpu,threshold=checking_cpu
+          if used_cpu<threshold
           scale_apps_inPrivateCloud(scale_list)
+          else
+            scale_apps_inPublicCloud(scale_list)
+          end
         end
 
         total_samples += 1
@@ -368,6 +372,23 @@ class Autoscale
   end
   def scale_apps_inPublicCloud(scale_list)
     puts "scale in public cloud"
+  end
+  def checking_cpu
+    uri = URI("http://10.0.30.101:5050/metrics/snapshot")
+    req = Net::HTTP::Get.new(uri)
+    response = Net::HTTP.start(uri.hostname, uri.port) {|http|
+        http.request(req)
+       }
+   if response.code == "200"
+      result = JSON.parse(response.body)
+      total_cpu=result["master\/cpus_total"]
+      used_cpu=result["master\/cpus_used"]
+      threshold=0.7*total_cpu
+      return total_cpu,used_cpu,threshold
+   else
+       puts "ERROR!!!"
+   end
+   end
 end
 
 options = Optparser.parse(ARGV)
