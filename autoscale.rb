@@ -260,6 +260,7 @@ class Autoscale
   end
 
   def aggregate_haproxy_data(haproxy_data)
+        @log.info('inside aggregate_haproxy_data')
     @apps.each do |app,data|
       if data[:rate].length >= @options.samples
         data[:rate].shift
@@ -276,6 +277,7 @@ class Autoscale
   end
 
   def update_current_marathon_instances
+    @log.info('inside update_current_marathon_instances')
     req = Net::HTTP::Get.new('/v2/apps')
     if !@options.marathonCredentials.empty?
       req.basic_auth @options.marathonCredentials[0], @options.marathonCredentials[1]
@@ -302,6 +304,7 @@ class Autoscale
   end
 
   def calculate_target_instances
+    @log.info('inside update_current_marathon_instances')
     @apps.each do |app,data|
       data[:target_instances] =
         [
@@ -387,7 +390,7 @@ class Autoscale
       result = JSON.parse(response.body)
       total_cpu=result["master\/cpus_total"]
       used_cpu=result["master\/cpus_used"]
-      threshold=0.2*total_cpu
+      threshold=0.5*total_cpu
       return total_cpu,used_cpu,threshold
    else
        puts "ERROR!!!"
