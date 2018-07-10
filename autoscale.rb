@@ -181,7 +181,7 @@ class Autoscale
             @log.info("#{scale_list.length} apps require scaling")
           end
 
-          scale_apps(scale_list)
+          scale_apps_inPrivateCloud(scale_list)
         end
 
         total_samples += 1
@@ -350,7 +350,7 @@ class Autoscale
     to_scale
   end
 
-  def scale_apps(scale_list)
+  def scale_apps_inPrivateCloud(scale_list)
     scale_list.each do |app,instances|
       req = Net::HTTP::Put.new('/v2/apps/' + app)
       if !@options.marathonCredentials.empty?
@@ -366,6 +366,8 @@ class Autoscale
       end
     end
   end
+  def scale_apps_inPublicCloud(scale_list)
+    puts "scale in public cloud"
 end
 
 options = Optparser.parse(ARGV)
