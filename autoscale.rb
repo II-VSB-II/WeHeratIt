@@ -182,9 +182,9 @@ class Autoscale
             @log.info("#{scale_list.length} apps require scaling")
           end
           total_cpu,used_cpu,threshold=checking_cpu
-          @log.info('Total CPU: #{total_cpu}')
-          @log.info('Used CPU: #{used_cpu}')
-          @log.info('Threshold: #{threshold}')
+          @log.info('Total CPU:'+total_cpu.to_s)
+          @log.info('Used CPU:'+used_cpu.to_s)
+          @log.info('Threshold:'+threshold.to_s)
           if used_cpu<threshold
           scale_apps_inPrivateCloud(scale_list)
           else
@@ -261,7 +261,6 @@ class Autoscale
   end
 
   def aggregate_haproxy_data(haproxy_data)
-        @log.info('inside aggregate_haproxy_data')
     @apps.each do |app,data|
       if data[:rate].length >= @options.samples
         data[:rate].shift
@@ -278,7 +277,6 @@ class Autoscale
   end
 
   def update_current_marathon_instances
-    @log.info('inside update_current_marathon_instances')
     req = Net::HTTP::Get.new('/v2/apps')
     if !@options.marathonCredentials.empty?
       req.basic_auth @options.marathonCredentials[0], @options.marathonCredentials[1]
@@ -305,7 +303,6 @@ class Autoscale
   end
 
   def calculate_target_instances
-    @log.info('inside calculate_target_instances')
     @apps.each do |app,data|
       data[:target_instances] =
         [
@@ -383,12 +380,12 @@ class Autoscale
   end
   def checking_cpu
     uri = URI("http://10.0.30.101:5050/metrics/snapshot")
-    req = Net::HTTP::Get.new(uri)
-    response = Net::HTTP.start(uri.hostname, uri.port) {|http|
-        http.request(req)
+    reqq = Net::HTTP::Get.new(uri)
+    responsee = Net::HTTP.start(uri.hostname, uri.port) {|http|
+        http.request(reqq)
        }
-   if response.code == "200"
-      result = JSON.parse(response.body)
+   if responsee.code == "200"
+      result = JSON.parse(responsee.body)
       total_cpu=result["master\/cpus_total"]
       used_cpu=result["master\/cpus_used"]
       threshold=0.5*total_cpu
