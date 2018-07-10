@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
-
+require "rubygems"
+require "uri"
 require 'optparse'
 require 'optparse/time'
 require 'optparse/uri'
@@ -304,7 +305,7 @@ class Autoscale
   end
 
   def calculate_target_instances
-    @log.info('inside update_current_marathon_instances')
+    @log.info('inside calculate_target_instances')
     @apps.each do |app,data|
       data[:target_instances] =
         [
