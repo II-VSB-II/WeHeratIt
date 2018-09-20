@@ -50,7 +50,7 @@ function rebuild {
   python3.6 --version
   if [ $? -ne 0 ] ; then 
     cd $SCRIPTPATH
-    yum install -y zlib-dev openssl-devel sqlite-devel bzip2-devel xz-libs gcc -y
+    yum install -y zlib-dev openssl-devel sqlite-devel bzip2-devel xz-libs gcc nmap
     wget https://www.python.org/ftp/python/3.6.0/Python-3.6.0.tar.xz
     xz -d Python-3.6.0.tar.xz
     tar -xvf Python-3.6.0.tar
@@ -294,4 +294,3 @@ unset SCRIPTPATH
 ####  Boneyard for interesting commands:
 
 # openstack server create --image mes-nodeTemplate74-dockerCE --flavor m1.xlarge --security-group mes01.internal --key-name heccp_demo2 --availability-zone nova --wait private-8
-
