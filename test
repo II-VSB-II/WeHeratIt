@@ -1,7 +1,24 @@
 #! /bin/bash
 
 ## Note: This utility requires nmap, which you can get through the MacPorts package manager
-## Note: This utility requires nc on the bootstrap node, which can be installed via 
+## Note: This utility requires nc on the bootstrap node
+## Note: This utility requires jq on the bootstrap node, which you can get from yum after enabling the epel-release
+
+
+# setting up some global variables to make changes easier
+aquaserver_name=hec-aqua001
+aquaserver_internal_ip=10.0.0.140
+aquaserver_external_ip=216.84.238.186
+
+bootstrap_name=bootstrap
+bootstrap_internal_ip=10.0.0.137
+bootstrap_external_ip=216.84.237.132
+
+private_key_name=heccp_demo2.pem
+
+
+SCRIPT=$(stat -f "$0")
+SCRIPTPATH=$(dirname "$SCRIPT")
 
   echo Establishing the docker credentials for pulling the Aqua images...
   if [ -z "${DOCKERUSERNAME}" ]
@@ -27,9 +44,6 @@ function countdown() {
   done
   echo
 }
-
-SCRIPT=$(stat -f "$0")
-SCRIPTPATH=$(dirname "$SCRIPT")
 
 function rebuild {
   echo Checking Python3.6 Installation...
@@ -70,19 +84,17 @@ function rebuild {
   done
   openstack server rebuild master --image mes-nodeTemplate74-dockerCE &
   openstack server rebuild public --image mes-nodeTemplate74-dockerCE &
-  openstack server rebuild hec-aqua001 --image mes-nodeTemplate74-dockerCE &
+  openstack server rebuild $aquaserver_name --image mes-nodeTemplate74-dockerCE &
   wait
   echo Checking the status of the server rebuilds...
   while openstack server list -c Status | grep -oi "rebuild" > /dev/null;
     do
-      # ssh -q -i $SCRIPTPATH/heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.237.132 "bash ./check_server_response.sh"
       echo "    Server rebuilds still pending, retesting in ..."
       countdown 00:00:05
     done
-  #echo "  The server rebuilds are complete, checking for a response from the Aqua server..."
   deactivate
 
-  while nmap 216.84.238.186 -Pn -p 22 | grep -iE 'closed|filtered' > /dev/null;
+  while nmap $aquaserver_external_ip -Pn -p 22 | grep -iE 'closed|filtered' > /dev/null;
     do 
       echo "    The Aqua server is not yet responding, testing again in ..."
       countdown 00:00:05
@@ -90,50 +102,69 @@ function rebuild {
   countdown 00:00:60
 }
 
-function setdnssuffix {
+####  This whole function may need to move the remote bootstrap machine as a script to remotely execute
+# function setpassword {
+#   echo setting up the centos password on all servers, including the bootstrap
+#   for ((n=1; n<=13; n++)) do
+#     #### write the centos:<password> the changepwd.txt file on the remote machine and run chpasswd -c SHA512 < changepwd.txt
+#       #### may need to run as sudo
+#   done
+#   master #### write the centos:<password> the changepwd.txt file on the remote machine and run chpasswd -c SHA512 < changepwd.txt
+#   public #### write the centos:<password> the changepwd.txt file on the remote machine and run chpasswd -c SHA512 < changepwd.txt
+#   hec-aqua001 #### write the centos:<password> the changepwd.txt file on the remote machine and run chpasswd -c SHA512 < changepwd.txt
+#   bootstratp  #### write the centos:<password> the changepwd.txt file on the remote machine and run chpasswd -c SHA512 < changepwd.txt
+# }
+
+function fixdns {
   echo clearing the known hosts file on the bootstrap server to avoid spamming warnings
-  ssh -q -i $SCRIPTPATH/heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.237.132 "
-  sudo rm -f \$HOME/.ssh/known_hosts;
+  ssh -q -i $SCRIPTPATH/$private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$bootstrap_external_ip "
+  sudo rm -f \$HOME/.ssh/known_hosts
   "
+
   echo setting dns search suffix on cluster nodes
-  ssh -q -i $SCRIPTPATH/heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.237.132 "
-  sudo bash \$HOME/set-cluster-dnssuffix.sh;
+  ssh -q -i $SCRIPTPATH/$private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$bootstrap_external_ip "
+  sudo bash \$HOME/set-cluster-dnssuffix.sh
+  "
+
+  echo setting dns search suffix on cluster nodes
+  ssh -q -i $SCRIPTPATH/$private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$bootstrap_external_ip "
+  sudo bash \$HOME/set-cluster-hostnames.sh
   "
 }
 
 function cleanupbootstrap {
   echo Cleaning up the docker containers on the bootstrap machine, Aqua conflicts with the DC/OS install...
-  CONTAINERS=$(ssh -q -i $SCRIPTPATH/heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.237.132 "sudo docker ps -aq" | sed -E -e 's/[[:blank:]]+/\n/g')
+  CONTAINERS=$(ssh -q -i $SCRIPTPATH/$private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$bootstrap_external_ip "sudo docker ps -aq" | sed -E -e 's/[[:blank:]]+/\n/g')
   if [ ! -z "${CONTAINERS}" ]; then
     for CONTAINER in $CONTAINERS; do
-      ssh -q -i $SCRIPTPATH/heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.237.132 "sudo docker stop $CONTAINER"
-      ssh -q -i $SCRIPTPATH/heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.237.132 "sudo docker stop $CONTAINER"
-      ssh -q -i $SCRIPTPATH/heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.237.132 "sudo docker rm $CONTAINER"
+      ssh -q -i $SCRIPTPATH/$private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$bootstrap_external_ip "sudo docker stop $CONTAINER"
+      ssh -q -i $SCRIPTPATH/$private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$bootstrap_external_ip "sudo docker stop $CONTAINER"
+      ssh -q -i $SCRIPTPATH/$private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$bootstrap_external_ip "sudo docker rm $CONTAINER"
     done
   else
     echo "    Nothing to cleanup"
   fi
-  ssh -q -i $SCRIPTPATH/heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.237.132 "sudo docker system prune --force"
+  ssh -q -i $SCRIPTPATH/$private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$bootstrap_external_ip "sudo docker system prune --force"
 }
 
 function dcosinstall {
   echo Installing DC/OS ...
-  ssh -q -i $SCRIPTPATH/heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.237.132 "
+  ssh -q -i $SCRIPTPATH/$private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$bootstrap_external_ip "
   rm -rf \$HOME/genconf/serve/;
   rm -f \$HOME/genconf/cluster_packages.json;
   rm -f \$HOME/*.tar;
   sudo bash \$HOME/dcos_generate_config.ee.sh --genconf;
   sudo bash \$HOME/dcos_generate_config.ee.sh --install-prereqs;
-  sudo bash \$HOME/dcos_generate_config.ee.sh --preflight;
+  # sudo bash \$HOME/dcos_generate_config.ee.sh --preflight;
   sudo bash \$HOME/dcos_generate_config.ee.sh --deploy;
-  sudo bash \$HOME/dcos_generate_config.ee.sh --postflight;
-  dcos auth login --username=root --password=jonah-sward-marimba-lentil-unmanly-inceptor;
-  dcos package install --options=\$HOME/connectedcar/kibana_config.json --yes beta-kibana --package-version=1.0.13-5.4.1-beta;
+  # sudo bash \$HOME/dcos_generate_config.ee.sh --postflight;
+  # dcos auth login --username=root --password=hds123;
+  # dcos package install --options=\$HOME/connectedcar/kibana_config.json --yes beta-kibana --package-version=1.0.13-5.4.1-beta;
   "
 }
 
 function aquainstall {
-  ssh -q -i $SCRIPTPATH/heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.238.186 "
+  ssh -q -i $SCRIPTPATH/$private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$aquaserver_external_ip "
     echo Logging out of docker, if logged in, and logging in with provided credentials
     sudo docker logout
     sudo docker login --username $DOCKERUSERNAME --password $DOCKERPWD
@@ -145,17 +176,17 @@ function aquainstall {
     sudo docker pull aquasec/agent:3.2.0 &
     wait
     "
-  ssh -q -i $SCRIPTPATH/heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.238.186 <<EOF
+  ssh -q -i $SCRIPTPATH/$private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$aquaserver_external_ip <<EOF
     echo Launching Aqua containers...
     sudo docker run -d --restart=unless-stopped -p 5432:5432 --name aqua-db -e POSTGRES_PASSWORD=Hitvan123! aquasec/database:3.2.0 &
-    sudo docker run -d --restart=unless-stopped -p 8080:8080 -p 443:8443 --name aqua-web --user=root -e ADMIN_PASSWORD=Hitvan123! -e SCALOCK_DBUSER=postgres -e SCALOCK_DBPASSWORD=Hitvan123! -e SCALOCK_DBNAME=scalock -e SCALOCK_DBHOST=hec-aqua001 -e SCALOCK_AUDIT_DBUSER=postgres -e SCALOCK_AUDIT_DBPASSWORD=Hitvan123! -e SCALOCK_AUDIT_DBNAME=slk_audit -e SCALOCK_AUDIT_DBHOST=hec-aqua001 -e LICENSE_TOKEN=7qyw0dKyxEbLXx2dGQXUMD74e1FjnsGEM5Gork9hWwCmWVhqzzArXH_iCYzAXSj75VT6Y0vyrBJ3Yr3k_g87RrnWy8ZnGTxYazOefAqTBeHAX2qwiIjzAxK1eWKZoj07OeaZdH-3XS6SFPefjM5y2UKp4QAkyM7alum4hjKxWt4E5YqU5t2_TvfVJWaQ0qSJ1QqB5OnPRU3i8Z3H99e-O6ViT9MaybLDh6tvha45PRUtoS49FwpxIA0nDFbtwncHV7B0PG-8oag1WWXW31Ng7_gQG8aCHffnYUTO-BG8ss9yspQUwda3tvfiPRjyVEIzBH1hY5ZaZe6-mrZhyqoMXsl7rbvlCOW1obbtavThv-WSZKCT-ctYiF6S1hcULAklKRhrXvbr9JlDIgGJIOTM81rO-r1ZCkuiArhxSBr7NCvN0gYQBHwJMiHUmw9oys_mqEFDm-hxBwhia-Xk9A== -v /var/run/docker.sock:/var/run/docker.sock aquasec/server:3.2.0 &
-    sudo docker run -d --restart=unless-stopped -p 3622:3622 --name aqua-gateway -e SCALOCK_GATEWAY_NAME=hec-aqua001 -e SCALOCK_DBUSER=postgres -e SCALOCK_DBPASSWORD=Hitvan123! -e SCALOCK_DBNAME=scalock -e SCALOCK_DBHOST=hec-aqua001 -e SCALOCK_AUDIT_DBUSER=postgres -e SCALOCK_AUDIT_DBPASSWORD=Hitvan123! -e SCALOCK_AUDIT_DBNAME=slk_audit -e SCALOCK_AUDIT_DBHOST=hec-aqua001 aquasec/gateway:3.2.0 &
+    sudo docker run -d --restart=unless-stopped -p 8080:8080 -p 443:8443 --name aqua-web --user=root -e ADMIN_PASSWORD=Hitvan123! -e SCALOCK_DBUSER=postgres -e SCALOCK_DBPASSWORD=Hitvan123! -e SCALOCK_DBNAME=scalock -e SCALOCK_DBHOST=$aquaserver_name -e SCALOCK_AUDIT_DBUSER=postgres -e SCALOCK_AUDIT_DBPASSWORD=Hitvan123! -e SCALOCK_AUDIT_DBNAME=slk_audit -e SCALOCK_AUDIT_DBHOST=$aquaserver_name -e LICENSE_TOKEN=7qyw0dKyxEbLXx2dGQXUMD74e1FjnsGEM5Gork9hWwCmWVhqzzArXH_iCYzAXSj75VT6Y0vyrBJ3Yr3k_g87RrnWy8ZnGTxYazOefAqTBeHAX2qwiIjzAxK1eWKZoj07OeaZdH-3XS6SFPefjM5y2UKp4QAkyM7alum4hjKxWt4E5YqU5t2_TvfVJWaQ0qSJ1QqB5OnPRU3i8Z3H99e-O6ViT9MaybLDh6tvha45PRUtoS49FwpxIA0nDFbtwncHV7B0PG-8oag1WWXW31Ng7_gQG8aCHffnYUTO-BG8ss9yspQUwda3tvfiPRjyVEIzBH1hY5ZaZe6-mrZhyqoMXsl7rbvlCOW1obbtavThv-WSZKCT-ctYiF6S1hcULAklKRhrXvbr9JlDIgGJIOTM81rO-r1ZCkuiArhxSBr7NCvN0gYQBHwJMiHUmw9oys_mqEFDm-hxBwhia-Xk9A== -v /var/run/docker.sock:/var/run/docker.sock aquasec/server:3.2.0 &
+    sudo docker run -d --restart=unless-stopped -p 3622:3622 --name aqua-gateway -e SCALOCK_GATEWAY_NAME=$aquaserver_name -e SCALOCK_DBUSER=postgres -e SCALOCK_DBPASSWORD=Hitvan123! -e SCALOCK_DBNAME=scalock -e SCALOCK_DBHOST=$aquaserver_name -e SCALOCK_AUDIT_DBUSER=postgres -e SCALOCK_AUDIT_DBPASSWORD=Hitvan123! -e SCALOCK_AUDIT_DBNAME=slk_audit -e SCALOCK_AUDIT_DBHOST=$aquaserver_name aquasec/gateway:3.2.0 &
     wait
 EOF
 
   echo Waiting up to two minutes for the aqau server components to initialize
   COUNTER=0
-  STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://216.84.238.186:8080/api)
+  STATUS=$(curl -s -o /dev/null -w '%{http_code}' http\://$aquaserver_external_ip\:8080/api)
   echo The aqua-server API returned a $STATUS response
   while [ $STATUS -ne "200" ]
     do
@@ -169,32 +200,34 @@ EOF
                 COUNTER=$((COUNTER+1))
                 echo waiting 5 seconds to test again
                 sleep 5s
-                STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://216.84.238.186:8080/api)
-                echo The aqua-server API returned a $STATUS response
+                STATUS=$(curl -s -o /dev/null -w '%{http_code}' http\://${aquaserver_external_ip}\:8080/api)
+                echo The aqua-server API returned the following response: $STATUS
         fi
     done
   unset STATUS
   unset COUNTER
 
-  ssh -q -i $SCRIPTPATH/heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.238.186 <<EOF
+  ssh -q -i $SCRIPTPATH/$private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$aquaserver_external_ip <<EOF
     echo Created the scanner user and launching the scanner container...
-    curl -u administrator:Hitvan123! -X POST -H "Content-Type:application/json" --data '{"id":"scanner", "name":"scanner", "password":"Hitvan123!", "role":"scanner"}' http://hec-aqua001:8080/api/v1/users
-    sudo docker run -d --restart=unless-stopped -v /var/run/docker.sock:/var/run/docker.sock aquasec/scanner-cli:3.2.0 daemon -H http://hec-aqua001:8080 -U scanner -P Hitvan123!
+    curl -u administrator:Hitvan123! -X POST -H "Content-Type:application/json" --data '{"id":"scanner", "name":"scanner", "password":"Hitvan123!", "role":"scanner"}' http://$aquaserver_name:8080/api/v1/users
+    sudo docker run -d --restart=unless-stopped -v /var/run/docker.sock:/var/run/docker.sock aquasec/scanner-cli:3.2.0 daemon -H http://$aquaserver_name:8080 -U scanner -P Hitvan123!
 EOF
 }
 
 function createagents {
-  ssh -q -i heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.238.186 "
+  ssh -q -i $private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$aquaserver_external_ip "
     sudo docker save --output agent-3.2.0.tar aquasec/agent:3.2.0
     sudo chmod 777 ./agent-3.2.0.tar
   "
-  ssh -q -i heccp_demo2.pem centos@216.84.237.132 "
-    scp -i \$HOME/heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@10.0.0.140:./agent-3.2.0.tar ./
+  ssh -q -i $private_key_name centos@$bootstrap_external_ip "
+    scp -i \$HOME/$private_key_name -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@$aquaserver_internal_ip:./agent-3.2.0.tar ./
+  "
+  ssh -q -i $private_key_name centos@$bootstrap_external_ip "
     \$HOME/install_aqua_agents.sh
   "
 }
 
-function add_policy_on_aqua {
+function addpolicyonaqua {
    ssh -q -i heccp_demo2.pem -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" centos@216.84.238.186 <<EOF
    
    echo Adding Policies to AQUA..
@@ -238,22 +271,27 @@ EOF
 }
 
 cleanupbootstrap
-
 rebuild
-setdnssuffix
-
+fixdns
 dcosinstall
-
 aquainstall
 createagents
-add_policy_on_aqua
-
+addpolicyonaqua
 unset SCRIPT
 unset SCRIPTPATH
 unset DOCKERUSERNAME
 unset DOCKERPWD
-
+unset aquaserver_name
+unset aquaserver_internal_ip
+unset aquaserver_external_ip
+unset bootstrap_name
+unset bootstrap_internal_ip
+unset bootstrap_external_ip
+unset private_key_name
+unset SCRIPT
+unset SCRIPTPATH
 
 ####  Boneyard for interesting commands:
 
-# openstack server create --image mes-nodeTemplate74-dockerCE --flavor m1.xlarge --security-group mes01.internal --key-name next_demo --availability-zone nova --wait private-8
+# openstack server create --image mes-nodeTemplate74-dockerCE --flavor m1.xlarge --security-group mes01.internal --key-name heccp_demo2 --availability-zone nova --wait private-8
+
