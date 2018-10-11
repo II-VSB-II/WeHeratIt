@@ -1,0 +1,36 @@
+#! /bin/bash
+
+function rebuild {
+  echo Checking Python3.6 Installation...
+  python3.6 --version
+  if [ $? -ne 0 ] ; then 
+    cd $SCRIPTPATH
+    yum install -y zlib-dev openssl-devel sqlite-devel bzip2-devel xz-libs gcc nmap > /dev/null
+    wget https://www.python.org/ftp/python/3.6.0/Python-3.6.0.tar.xz > /dev/null
+    xz -d Python-3.6.0.tar.xz > /dev/null
+    tar -xvf Python-3.6.0.tar > /dev/null
+    cd Python-3.6.0
+    ./configure --prefix=/usr/local > /dev/null
+    make > /dev/null
+    make altinstall > /dev/null
+    export PATH="/usr/local/bin:$PATH"
+    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py > /dev/null
+    python3.6 get-pip.py > /dev/null
+    rm -f get-pip.py
+    rm -rf Python-3.6.0
+    rm -f Python-3.6.0.tar
+  else
+    echo     python3.6 is already installed
+  fi
+  echo Setting up python openstack client...
+  cd $SCRIPTPATH
+  ls .env
+  if [ $? -ne 0 ] ; then
+      python3.6 -m venv .env
+  else
+     echo Virtual enviornment is present
+  fi
+  source $SCRIPTPATH/.env/bin/activate
+  python3.6 -m pip install python-openstackclient > /dev/null
+  }
+  rebuild
